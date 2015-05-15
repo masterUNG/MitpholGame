@@ -16,22 +16,25 @@ import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.TimeUtils;
 
+
 import java.util.Iterator;
 
 public class MyGdxGame extends ApplicationAdapter {
 	private SpriteBatch batch;
 	private Texture wallpaperTexture, cloudTexture,
-			pigTexture, rainTexture, coinsTexture;
+			pigTexture, rainTexture, coinsTexture, wallpaper2Texture;
 	private OrthographicCamera objOrthographicCamera;
-	private BitmapFont nameBitmapFont;
-	private int intCloudX = 0, intCloudY = 600;
-	private boolean bolCloud = true;
+	private BitmapFont nameBitmapFont, coinsDropBitmapFont,
+			scoreBitmapFont, scoreFinalBitmapFont;
+	private int intCloudX = 0, intCloudY = 600, intCoinsDrop = 0,
+			intScore = 0, intFinalScore;
+	private boolean bolCloud = true, bolStatus = false;
 	private Rectangle pigRectangle, rainRectangle, coinsRectangle;
-	private Sound pigSound, dropSound;
+	private Sound pigSound, dropSound, coinsDropSound, photonSound;
 	private Vector3 objVector3;
-	private Array<Rectangle> rainArray;
-	private long lastDropRain;
-	private Iterator<Rectangle> rainIterator; // Iterator ==> Java.util
+	private Array<Rectangle> rainArray, coinsArray;
+	private long lastDropRain, lastDropCoins;
+	private Iterator<Rectangle> rainIterator, coinsIterator; // Iterator ==> Java.util
 	private Music rainMusic, backgroundMusic;
 
 	@Override
@@ -59,7 +62,9 @@ public class MyGdxGame extends ApplicationAdapter {
 		//Setup pigRectangle
 		pigRectangle = new Rectangle();
 		pigRectangle.x = 568; // มาจาก 1200/2 - 64/2
-		pigRectangle.y = 50;
+		pigRectangle.y = 100;
+		pigRectangle.width = 64;
+		pigRectangle.height = 64;
 
 		//Setup pigSound
 		pigSound = Gdx.audio.newSound(Gdx.files.internal("pig.wav"));
@@ -83,8 +88,48 @@ public class MyGdxGame extends ApplicationAdapter {
 		//Setup coinsTexture
 		coinsTexture = new Texture("coins.png");
 
+		//Create coinsArray
+		coinsArray = new Array<Rectangle>();
+		coinsRandomDrop();
+
+		//Setup coinsDropFont
+		coinsDropBitmapFont = new BitmapFont();
+		coinsDropBitmapFont.setColor(Color.WHITE);
+		coinsDropBitmapFont.setScale(4);
+
+		//Setup scoreFont
+		scoreBitmapFont = new BitmapFont();
+		scoreBitmapFont.setColor(Color.WHITE);
+		scoreBitmapFont.setScale(4);
+
+		//Setup coinsDropSound
+		coinsDropSound = Gdx.audio.newSound(Gdx.files.internal("coins_drop.wav"));
+
+		//Setup photonSound
+		photonSound = Gdx.audio.newSound(Gdx.files.internal("phonton1.wav"));
+
+		//Setup Wallpaper2
+		wallpaper2Texture = new Texture("background1200x800.png");
+
+		//Setup scoreFinalFont
+		scoreFinalBitmapFont = new BitmapFont();
+		scoreFinalBitmapFont.setColor(Color.RED);
+		scoreFinalBitmapFont.setScale(4);
 
 	}	// create เมธอดที่ทำหน้าที่ กำหนดค่าเริ่มต้นให้ object
+
+	private void coinsRandomDrop() {
+
+		coinsRectangle = new Rectangle();
+		coinsRectangle.x = MathUtils.random(0, 1136);
+		coinsRectangle.y = 800;
+		coinsRectangle.width = 64;
+		coinsRectangle.height = 64;
+
+		coinsArray.add(coinsRectangle);
+		lastDropCoins = TimeUtils.nanoTime();
+
+	}	// coinsRandomDrop
 
 	private void rainRandomDrop() {
 
@@ -127,6 +172,23 @@ public class MyGdxGame extends ApplicationAdapter {
 		for (Rectangle forRainRectangle : rainArray) {
 			batch.draw(rainTexture, forRainRectangle.x, forRainRectangle.y);
 		}	// for
+
+		//Draw Coins
+		for (Rectangle forCoinsRectangle : coinsArray) {
+			batch.draw(coinsTexture, forCoinsRectangle.x, forCoinsRectangle.y);
+		}	// for
+
+		//Draw coinsDropFont
+		coinsDropBitmapFont.draw(batch, "Coins Drop = " + Integer.toString(intCoinsDrop), 50, 100);
+
+		//Draw scoreFont
+		scoreBitmapFont.draw(batch, "Score = " + Integer.toString(intScore), 900, 100);
+
+		//Draw When Finish Game
+		if (bolStatus) {
+			batch.draw(wallpaper2Texture, 0, 0);
+			scoreFinalBitmapFont.draw(batch, "Score = " + Integer.toString(intFinalScore), 500, 500);
+		}
 
 		batch.end();
 
@@ -184,7 +246,7 @@ public class MyGdxGame extends ApplicationAdapter {
 		while (rainIterator.hasNext()) {
 
 			Rectangle myRainRectangle = rainIterator.next();
-			myRainRectangle.y -= 100 * Gdx.graphics.getDeltaTime();
+			myRainRectangle.y -= 50 * Gdx.graphics.getDeltaTime();
 
 			//Event rain to Floor
 			if (myRainRectangle.y + 64 < 0) {
@@ -195,6 +257,44 @@ public class MyGdxGame extends ApplicationAdapter {
 
 			}	// if
 
+			//When OverLab With Pig
+			if (myRainRectangle.overlaps(pigRectangle)) {
+				intScore -= 1;
+				photonSound.play();
+				rainIterator.remove();
+
+			}
+
+		}	// while
+
+		//Start Drop coins
+		if (TimeUtils.nanoTime() - lastDropCoins > 1E9) {
+			coinsRandomDrop();
+		}
+
+		coinsIterator = coinsArray.iterator();
+		while (coinsIterator.hasNext()) {
+
+			Rectangle myCoinsRectangle = coinsIterator.next();
+			myCoinsRectangle.y -= 50 * Gdx.graphics.getDeltaTime();
+
+			//When Coins into Floor
+			if (myCoinsRectangle.y + 64 < 0) {
+				dropSound.play();
+				coinsIterator.remove();
+				intCoinsDrop += 1;
+				checkCoinsDrop();
+			}	// if
+
+			// When OverLap
+			if (myCoinsRectangle.overlaps(pigRectangle)) {
+				intScore += 1;
+				coinsDropSound.play();
+				coinsIterator.remove();
+
+			}
+
+
 		}	// while
 
 		//BackGround Music
@@ -203,7 +303,37 @@ public class MyGdxGame extends ApplicationAdapter {
 		backgroundMusic.play();
 
 
-
 	}	// rander คือเมธอดที่ ทำงานตาม loop time
 
+	private void checkCoinsDrop() {
+		if (intCoinsDrop > 10) {
+			dispose();
+
+			if (!bolStatus) {
+				intFinalScore = intScore;
+			}
+
+			bolStatus = true;
+
+		}
+	}
+
+
+	@Override
+	public void dispose() {
+		super.dispose();
+		dropSound.dispose();
+		coinsDropSound.dispose();
+		rainTexture.dispose();
+		coinsTexture.dispose();
+		cloudTexture.dispose();
+		pigTexture.dispose();
+		photonSound.dispose();
+	}
+
+	@Override
+	public void pause() {
+		super.pause();
+		intCoinsDrop = 12345;
+	}
 }	// Main Class
